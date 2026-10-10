@@ -1,12 +1,15 @@
 from typing import Any, Dict, List, Optional
 
-from .decorators import handle_db_errors, confirm_action, log_time
-from .utils import make_select_key, _cached_get, load_table_data, save_table_data
+from .decorators import confirm_action, handle_db_errors, log_time
+from .utils import _cached_get, load_table_data, make_select_key, save_table_data
 
 
 @handle_db_errors
 @log_time
-def select(table_name: str, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def select(
+    table_name: str,
+    where: Optional[Dict[str, Any]] = None
+) -> List[Dict[str, Any]]:
     data = load_table_data(table_name)
     key = make_select_key(table_name, where or {})
 
@@ -17,7 +20,6 @@ def select(table_name: str, where: Optional[Dict[str, Any]] = None) -> List[Dict
         return [row for row in data if row.get(key_col) == val]
 
     return _cached_get(key, fetch)
-
 
 @handle_db_errors
 @log_time
@@ -38,7 +40,6 @@ def insert(table_name: str, rows: List[Dict[str, Any]]) -> int:
     save_table_data(table_name, data)
     return len(rows)
 
-
 @handle_db_errors
 @log_time
 @confirm_action("удаление строк из таблицы")
@@ -55,12 +56,12 @@ def delete(table_name: str, where: Optional[Dict[str, Any]] = None) -> int:
     save_table_data(table_name, data)
     return original_len - len(data)
 
-
 @handle_db_errors
 @log_time
 @confirm_action("удаление таблицы и всех её данных")
 def drop_table(table_name: str) -> bool:
     from pathlib import Path
+
     from .utils import DATA_DIR
 
     filepath = Path(DATA_DIR) / f"{table_name}.json"
@@ -68,7 +69,6 @@ def drop_table(table_name: str) -> bool:
         filepath.unlink()
         return True
     return False
-
 
 @handle_db_errors
 @log_time
@@ -85,7 +85,6 @@ def update(table_name: str, set_clause: Dict[str, Any], where: Dict[str, Any]) -
 
     save_table_data(table_name, data)
     return updated_count
-
 
 @handle_db_errors
 @log_time
