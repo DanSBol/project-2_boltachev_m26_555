@@ -1,8 +1,7 @@
-from .engine import start_working
-
+from .engine import run
 
 def main():
-    start_working()
+    run()
 
 if __name__ == "__main__":
     main()
