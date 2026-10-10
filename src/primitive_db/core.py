@@ -1,38 +1,60 @@
-SUPPORTED_TYPES = {"int", "str", "bool"}
+from typing import Any, Dict, List
 
-def parse_columns(col_args: list[str]) -> list[tuple[str, str]]:
-    columns = []
-    for arg in col_args:
-        if ":" not in arg:
-            raise ValueError(f"Некорректный формат столбца: {arg}")
-        name, typ = arg.split(":", 1)
-        name = name.strip()
-        typ = typ.strip().lower()
-        if not name:
-            raise ValueError(f"Имя столбца пустое в: {arg}")
-        if typ not in SUPPORTED_TYPES:
-            raise ValueError(f"Неподдерживаемый тип данных: {typ} в {arg}")
-        columns.append((name, typ))
-    return columns
+def get_schema_cols(metadata, table_name):
+    """Возвращает список (name, type) без ID."""
+    table = metadata.get(table_name)
+    if not table:
+        return None
+    return [(c["name"], c["type"]) for c in table.get("columns", []) if c["name"].upper() != "ID"]
 
-def create_table(metadata: dict, table_name: str, col_args: list[str]) -> dict:
-    if table_name in metadata:
-        raise ValueError(f'Ошибка: Таблица "{table_name}" уже существует.')
+def insert(metadata, table_name, values):
+    schema = get_schema_cols(metadata, table_name)
+    if schema is None:
+        raise ValueError(f"Таблица '{table_name}' не найдена")
+    if len(values) != len(schema):
+        raise ValueError("Количество значений не совпадает со схемой")
 
-    user_columns = parse_columns(col_args)
+    # Валидация типов
+    for (name, col_type), val in zip(schema, values):
+        if col_type == "int":
+            if not isinstance(val, int) or isinstance(val, bool):
+                raise TypeError(f"{name}: ожидается int")
+        elif col_type == "str":
+            if not isinstance(val, str):
+                raise TypeError(f"{name}: ожидается str")
+        elif col_type == "bool":
+            if not isinstance(val, bool):
+                raise TypeError(f"{name}: ожидается bool")
 
-    final_columns = [("ID", "int")] + user_columns
+    from .utils import load_table_data
+    data = load_table_data(table_name)
 
-    metadata[table_name] = {
-        "columns": final_columns,
-    }
-    return metadata
+    # Авто-ID
+    ids = [r.get("ID", 0) for r in data]
+    new_id = (max(ids) + 1) if ids else 1
 
-def drop_table(metadata: dict, table_name: str) -> dict:
-    if table_name not in metadata:
-        raise ValueError(f'Ошибка: Таблица "{table_name}" не существует.')
-    del metadata[table_name]
-    return metadata
+    row = {"ID": new_id}
+    for (name, _), val in zip(schema, values):
+        row[name] = val
+    data.append(row)
+    return data
 
-def list_tables(metadata: dict) -> list[str]:
-    return list(metadata.keys())
+def select(data, where=None):
+    if not where:
+        return data
+    key, val = next(iter(where.items()))
+    return [r for r in data if r.get(key) == val]
+
+def update(data, set_clause, where):
+    key, val = next(iter(where.items()))
+    updated = False
+    for r in data:
+        if r.get(key) == val:
+            for k, v in set_clause.items():
+                r[k] = v
+            updated = True
+    return data
+
+def delete(data, where):
+    key, val = next(iter(where.items()))
+    return [r for r in data if r.get(key) != val]
