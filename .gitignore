@@ -1,7 +1,20 @@
-﻿.venv/
+﻿# uv
+.venv/
+.uv/
+
+# Сборка
+dist/
+build/
+*.egg-info/
+
+# Данные CLI
+data/
+db_meta.json
+
+# Python
 __pycache__/
 *.pyc
-.python-version
-uv.lock
-dist/
-*.egg-info
+
+# IDE
+.idea/
+.vscode/
