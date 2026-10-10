@@ -170,4 +170,4 @@ uv build
 
 ## Видеозапись сессии
 
-[![asciinema](https://asciinema.org/a/123456789.svg)](https://asciinema.org/connect/b7244580-a2f8-42c8-89e5-e351d950d4f6)
+[![asciicast](https://asciinema.org/a/1MbF1qQIwOfthokx.svg)](https://asciinema.org/a/1MbF1qQIwOfthokx)
