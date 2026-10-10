@@ -1,60 +1,108 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-def get_schema_cols(metadata, table_name):
-    """Возвращает список (name, type) без ID."""
-    table = metadata.get(table_name)
-    if not table:
-        return None
-    return [(c["name"], c["type"]) for c in table.get("columns", []) if c["name"].upper() != "ID"]
+from .decorators import handle_db_errors, confirm_action, log_time
+from .utils import make_select_key, _cached_get, load_table_data, save_table_data
 
-def insert(metadata, table_name, values):
-    schema = get_schema_cols(metadata, table_name)
-    if schema is None:
-        raise ValueError(f"Таблица '{table_name}' не найдена")
-    if len(values) != len(schema):
-        raise ValueError("Количество значений не совпадает со схемой")
 
-    # Валидация типов
-    for (name, col_type), val in zip(schema, values):
-        if col_type == "int":
-            if not isinstance(val, int) or isinstance(val, bool):
-                raise TypeError(f"{name}: ожидается int")
-        elif col_type == "str":
-            if not isinstance(val, str):
-                raise TypeError(f"{name}: ожидается str")
-        elif col_type == "bool":
-            if not isinstance(val, bool):
-                raise TypeError(f"{name}: ожидается bool")
-
-    from .utils import load_table_data
+@handle_db_errors
+@log_time
+def select(table_name: str, where: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     data = load_table_data(table_name)
+    key = make_select_key(table_name, where or {})
 
-    # Авто-ID
-    ids = [r.get("ID", 0) for r in data]
-    new_id = (max(ids) + 1) if ids else 1
+    def fetch():
+        if not where:
+            return data
+        key_col, val = next(iter(where.items()))
+        return [row for row in data if row.get(key_col) == val]
 
-    row = {"ID": new_id}
-    for (name, _), val in zip(schema, values):
-        row[name] = val
-    data.append(row)
-    return data
+    return _cached_get(key, fetch)
 
-def select(data, where=None):
+
+@handle_db_errors
+@log_time
+def insert(table_name: str, rows: List[Dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+
+    data = load_table_data(table_name)
+    ids = [r.get("id") for r in data if isinstance(r.get("id"), int)]
+    next_id = (max(ids) + 1) if ids else 1
+
+    for row in rows:
+        if "id" not in row or row["id"] is None:
+            row["id"] = next_id
+            next_id += 1
+
+    data.extend(rows)
+    save_table_data(table_name, data)
+    return len(rows)
+
+
+@handle_db_errors
+@log_time
+@confirm_action("удаление строк из таблицы")
+def delete(table_name: str, where: Optional[Dict[str, Any]] = None) -> int:
+    data = load_table_data(table_name)
+    original_len = len(data)
+
     if not where:
-        return data
-    key, val = next(iter(where.items()))
-    return [r for r in data if r.get(key) == val]
+        data.clear()
+    else:
+        key_col, val = next(iter(where.items()))
+        data = [row for row in data if row.get(key_col) != val]
 
-def update(data, set_clause, where):
-    key, val = next(iter(where.items()))
-    updated = False
+    save_table_data(table_name, data)
+    return original_len - len(data)
+
+
+@handle_db_errors
+@log_time
+@confirm_action("удаление таблицы и всех её данных")
+def drop_table(table_name: str) -> bool:
+    from pathlib import Path
+    from .utils import DATA_DIR
+
+    filepath = Path(DATA_DIR) / f"{table_name}.json"
+    if filepath.exists():
+        filepath.unlink()
+        return True
+    return False
+
+
+@handle_db_errors
+@log_time
+def update(table_name: str, set_clause: Dict[str, Any], where: Dict[str, Any]) -> int:
+    data = load_table_data(table_name)
+    updated_count = 0
+    key_col, val = next(iter(where.items()))
+
     for r in data:
-        if r.get(key) == val:
+        if r.get(key_col) == val:
             for k, v in set_clause.items():
                 r[k] = v
-            updated = True
-    return data
+            updated_count += 1
 
-def delete(data, where):
-    key, val = next(iter(where.items()))
-    return [r for r in data if r.get(key) != val]
+    save_table_data(table_name, data)
+    return updated_count
+
+
+@handle_db_errors
+@log_time
+def get_table_stats(table_name: str) -> Dict[str, Any]:
+    data = load_table_data(table_name)
+    if not data:
+        return {
+            "table": table_name,
+            "row_count": 0,
+            "columns": [],
+            "sample_row": None,
+        }
+
+    columns = list(data[0].keys())
+    return {
+        "table": table_name,
+        "row_count": len(data),
+        "columns": columns,
+        "sample_row": data[0],
+    }
