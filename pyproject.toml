@@ -1,7 +1,7 @@
 [project]
 name = "primitive-db"
 version = "0.1.0"
-description = "Add your description here"
+description = "Простой интерфейс командной строки для примитивной базы данных с метаданными в JSON"
 readme = "README.md"
 authors = [
     { name = "Dan Boltachev", email = "dan.s.boltachev@yandex.ru" }
@@ -24,7 +24,7 @@ target-version = "py312"
 exclude = ["venv", ".venv", "dist", "__pycache__"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "C901"]
 ignore = []
 
 [dependency-groups]
