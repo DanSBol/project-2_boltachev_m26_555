@@ -1,5 +1,8 @@
+from .engine import start_working
+
+
 def main():
-    print("DB project is running!")
+    start_working()
 
 if __name__ == "__main__":
     main()
