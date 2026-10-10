@@ -1,15 +1,15 @@
 import json
 import os
-from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
 
 METADATA_FILE = "db_meta.json"
 DATA_DIR = "data"
 
-def ensure_data_dir() -> None:
-    Path(DATA_DIR).mkdir(exist_ok=True)
+def ensure_data_dir():
+    # Аналог Path(DATA_DIR).mkdir(exist_ok=True)
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR)
 
-def load_metadata(filepath: str = METADATA_FILE) -> Dict[str, Any]:
+def load_metadata(filepath=METADATA_FILE):
     if not os.path.exists(filepath):
         return {}
 
@@ -24,15 +24,18 @@ def load_metadata(filepath: str = METADATA_FILE) -> Dict[str, Any]:
         print(msg)
         return {}
 
-def save_metadata(filepath: str, data: Dict[str, Any]) -> None:
+def save_metadata(filepath, data):
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def load_table_data(table_name: str) -> List[Dict[str, Any]]:
-    ensure_data_dir()
-    filepath = Path(DATA_DIR) / f"{table_name}.json"
+def _build_table_path(table_name):
+    return os.path.join(DATA_DIR, f"{table_name}.json")
 
-    if not filepath.exists():
+def load_table_data(table_name):
+    ensure_data_dir()
+    filepath = _build_table_path(table_name)
+
+    if not os.path.exists(filepath):
         return []
 
     try:
@@ -54,16 +57,16 @@ def load_table_data(table_name: str) -> List[Dict[str, Any]]:
         print(msg)
         return []
 
-def save_table_data(table_name: str, data: List[Dict[str, Any]]) -> None:
+def save_table_data(table_name, data):
     ensure_data_dir()
-    filepath = Path(DATA_DIR) / f"{table_name}.json"
+    filepath = _build_table_path(table_name)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def create_cacher() -> Callable[[Any, Callable[[], Any]], Any]:
-    cache: Dict[Any, Any] = {}
+def create_cacher():
+    cache = {}
 
-    def cache_result(key: Any, value_func: Callable[[], Any]) -> Any:
+    def cache_result(key, value_func):
         if key in cache:
             return cache[key]
         result = value_func()
@@ -74,10 +77,7 @@ def create_cacher() -> Callable[[Any, Callable[[], Any]], Any]:
 
 _cached_get = create_cacher()
 
-def make_select_key(
-    table_name: str,
-    where_clause: Optional[Dict[str, Any]] = None
-) -> str:
+def make_select_key(table_name, where_clause=None):
     if not where_clause:
         return f"select:{table_name}:no_where"
 

@@ -1,15 +1,10 @@
-from typing import Any, Dict, List, Optional
-
 from .decorators import confirm_action, handle_db_errors, log_time
 from .utils import _cached_get, load_table_data, make_select_key, save_table_data
 
 
 @handle_db_errors
 @log_time
-def select(
-    table_name: str,
-    where: Optional[Dict[str, Any]] = None
-) -> List[Dict[str, Any]]:
+def select(table_name, where=None):
     data = load_table_data(table_name)
     key = make_select_key(table_name, where or {})
 
@@ -23,7 +18,7 @@ def select(
 
 @handle_db_errors
 @log_time
-def insert(table_name: str, rows: List[Dict[str, Any]]) -> int:
+def insert(table_name, rows):
     if not rows:
         return 0
 
@@ -43,7 +38,7 @@ def insert(table_name: str, rows: List[Dict[str, Any]]) -> int:
 @handle_db_errors
 @log_time
 @confirm_action("удаление строк из таблицы")
-def delete(table_name: str, where: Optional[Dict[str, Any]] = None) -> int:
+def delete(table_name, where=None):
     data = load_table_data(table_name)
     original_len = len(data)
 
@@ -59,7 +54,7 @@ def delete(table_name: str, where: Optional[Dict[str, Any]] = None) -> int:
 @handle_db_errors
 @log_time
 @confirm_action("удаление таблицы и всех её данных")
-def drop_table(table_name: str) -> bool:
+def drop_table(table_name):
     from pathlib import Path
 
     from .utils import DATA_DIR
@@ -72,7 +67,7 @@ def drop_table(table_name: str) -> bool:
 
 @handle_db_errors
 @log_time
-def update(table_name: str, set_clause: Dict[str, Any], where: Dict[str, Any]) -> int:
+def update(table_name, set_clause, where):
     data = load_table_data(table_name)
     updated_count = 0
     key_col, val = next(iter(where.items()))
@@ -88,7 +83,7 @@ def update(table_name: str, set_clause: Dict[str, Any], where: Dict[str, Any]) -
 
 @handle_db_errors
 @log_time
-def get_table_stats(table_name: str) -> Dict[str, Any]:
+def get_table_stats(table_name):
     data = load_table_data(table_name)
     if not data:
         return {

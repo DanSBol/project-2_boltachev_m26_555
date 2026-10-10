@@ -1,11 +1,9 @@
-import re
-from typing import Any, Callable, Dict, List, Optional
-
+# src/primitive_db/engine.py
 from .core import delete, insert, select, update
 from .parser import parse_insert_row, parse_where_clause
 
 
-def handle_create_table(args: List[str]) -> None:
+def handle_create_table(args):
     if len(args) < 3:
         error_msg = (
             "Ошибка: недостаточно аргументов. "
@@ -17,7 +15,7 @@ def handle_create_table(args: List[str]) -> None:
     table_name = args[1]
     col_args = args[2:]
 
-    metadata: Dict[str, str] = {}
+    metadata = {}
     for c in col_args:
         if ":" not in c:
             err_fmt = f"Ошибка: неверный формат колонки '{c}'. Используйте col:type"
@@ -32,26 +30,45 @@ def handle_create_table(args: List[str]) -> None:
 
     print(f"Таблица '{table_name}' создана со схемой: {metadata}")
 
-def _map_values_to_row(values: List[Any]) -> Dict[str, Any]:
-    row: Dict[str, Any] = {}
+def _map_values_to_row(values):
+    row = {}
     for i, v in enumerate(values, start=1):
         col_name = f"col{i}"
         row[col_name] = v
     return row
 
-def handle_insert(user_input: str) -> None:
-    pattern = r"insert\s+into\s+(\w+)\s+values\s+(.*)"
-    m = re.match(pattern, user_input, re.IGNORECASE)
+def _parse_insert(user_input):
+    lower = user_input.lower()
+    if not lower.startswith("insert into"):
+        return None, None
 
-    if not m:
+    values_marker = "values"
+    idx = lower.find(values_marker)
+    if idx == -1:
+        return None, None
+
+    before = user_input[:idx].strip()
+    after = user_input[idx + len(values_marker):].strip()
+
+    prefix = "insert into"
+    if not before.lower().startswith(prefix):
+        return None, None
+    table_part = before[len(prefix):].strip()
+    table_name = table_part.split()[0] if table_part else ""
+    if not table_name:
+        return None, None
+
+    return table_name, after
+
+def handle_insert(user_input):
+    table_name, values_part = _parse_insert(user_input)
+    if table_name is None:
         help_msg = (
             "Неверный формат INSERT. "
-            "Пример: insert into users values (\"Alice\", 30)"
+            "Пример: insert into users values (\"Tatyana\", 43)"
         )
         print(help_msg)
         return
-
-    table_name, values_part = m.groups()
 
     try:
         values_list = parse_insert_row(values_part)
@@ -72,19 +89,34 @@ def handle_insert(user_input: str) -> None:
         err_msg = f"Ошибка INSERT: {e}"
         print(err_msg)
 
-def handle_select(user_input: str) -> None:
-    pattern = r"select\s+from\s+(\w+)(?:\s+where\s+(.*))?"
-    m = re.match(pattern, user_input, re.IGNORECASE)
+def _parse_select(user_input):
+    lower = user_input.lower()
+    if not lower.startswith("select from"):
+        return None, None
 
-    if not m:
+    marker = "select from"
+    rest = user_input[len(marker):].strip()
+
+    parts = rest.split("where", 1)  # максимум 2 части
+    table_part = parts[0].strip()
+    where_part = parts[1].strip() if len(parts) > 1 else None
+
+    table_name = table_part.split()[0] if table_part else ""
+    if not table_name:
+        return None, None
+
+    return table_name, where_part
+
+def handle_select(user_input):
+    table_name, where_part = _parse_select(user_input)
+    if table_name is None:
         help_msg = (
             "Неверный формат SELECT. "
-            "Пример: select from users where name=Alice"
+            "Пример: select from users where name=Tatyana"
         )
         print(help_msg)
         return
 
-    table_name, where_part = m.groups()
     where_dict = {}
 
     if where_part:
@@ -110,22 +142,53 @@ def handle_select(user_input: str) -> None:
         line = " | ".join(str(row.get(h, "")) for h in headers)
         print(line)
 
-def handle_update(user_input: str) -> None:
-    pattern = (
-        r"update\s+(\w+)\s+set\s+([^\s]+)\s*=\s*([^\s]+)"
-        r"(?:\s+where\s+(.*))?"
-    )
-    m = re.match(pattern, user_input, re.IGNORECASE)
+def _parse_update(user_input):
+    lower = user_input.lower()
+    if not lower.startswith("update"):
+        return None, None, None, None
 
-    if not m:
+    set_marker = "set"
+    set_idx = lower.find(set_marker, 6)  # ищем после 'update'
+    if set_idx == -1:
+        return None, None, None, None
+
+    table_part = user_input[6:set_idx].strip()
+    table_name = table_part.split()[0] if table_part else ""
+    if not table_name:
+        return None, None, None, None
+
+    set_rest = user_input[set_idx + len(set_marker):].strip()
+
+    where_marker = "where"
+    where_idx = set_rest.lower().find(where_marker)
+    if where_idx != -1:
+        set_clause = set_rest[:where_idx].strip()
+        where_part = set_rest[where_idx + len(where_marker):].strip()
+    else:
+        set_clause = set_rest
+        where_part = None
+
+    if "=" not in set_clause:
+        return None, None, None, None
+
+    equal_idx = set_clause.find("=")
+    col = set_clause[:equal_idx].strip()
+    val_raw = set_clause[equal_idx + 1:].strip()
+
+    if not col or not val_raw:
+        return None, None, None, None
+
+    return table_name, col, val_raw, where_part
+
+def handle_update(user_input):
+    table_name, col, val_raw, where_part = _parse_update(user_input)
+    if table_name is None:
         help_msg = (
             "Неверный формат UPDATE. "
-            "Пример: update users set age = 29 where name = \"Sergei\""
+            "Пример: update users set age = 44 where name = \"Dan\""
         )
         print(help_msg)
         return
-
-    table_name, col, val_raw, where_part = m.groups()
 
     val = val_raw.strip('"\'')
     try:
@@ -148,19 +211,38 @@ def handle_update(user_input: str) -> None:
     updated_count = update(table_name, set_data=set_data, where=where_dict)
     print(f"Обновлено строк: {updated_count}")
 
-def handle_delete(user_input: str) -> None:
-    pattern = r"delete\s+from\s+(\w+)\s+where\s+(.*)"
-    m = re.match(pattern, user_input, re.IGNORECASE)
+def _parse_delete(user_input):
+    lower = user_input.lower()
+    if not lower.startswith("delete from"):
+        return None, None
 
-    if not m:
+    marker = "delete from"
+    rest = user_input[len(marker):].strip()
+
+    where_marker = "where"
+    where_idx = rest.lower().find(where_marker)
+    if where_idx == -1:
+        # По нашей спецификации where обязателен
+        return None, None
+
+    table_part = rest[:where_idx].strip()
+    where_part = rest[where_idx + len(where_marker):].strip()
+
+    table_name = table_part.split()[0] if table_part else ""
+    if not table_name:
+        return None, None
+
+    return table_name, where_part
+
+def handle_delete(user_input):
+    table_name, where_part = _parse_delete(user_input)
+    if table_name is None:
         help_msg = (
             "Неверный формат DELETE. "
             "Пример: delete from users where name=Bob"
         )
         print(help_msg)
         return
-
-    table_name, where_part = m.groups()
 
     try:
         where_dict = parse_where_clause(where_part)
@@ -171,7 +253,7 @@ def handle_delete(user_input: str) -> None:
     deleted_count = delete(table_name, where=where_dict)
     print(f"Удалено строк: {deleted_count}")
 
-def show_help() -> None:
+def show_help():
     print("Доступные команды:")
     print("  create_table <имя> <col:type> ...      - создать таблицу")
     print("  insert into <имя> values (...)         - вставить строку")
@@ -181,7 +263,7 @@ def show_help() -> None:
     print("  list_tables                            - показать список таблиц")
     print("  quit                                   - выйти")
 
-COMMAND_HANDLERS: Dict[str, Callable[[str], None]] = {
+COMMAND_HANDLERS = {
     "create_table": lambda cmd: handle_create_table(cmd.split()),
     "insert": handle_insert,
     "select": handle_select,
@@ -189,7 +271,7 @@ COMMAND_HANDLERS: Dict[str, Callable[[str], None]] = {
     "delete": handle_delete,
 }
 
-def run() -> None:
+def run():
     print("Primitive DB Engine запущен. Введите 'help' для списка команд.")
 
     while True:
@@ -214,7 +296,7 @@ def run() -> None:
             print("[INFO] Список таблиц: users, orders, products (из файловой системы)")
             continue
 
-        handler: Optional[Callable[[str], None]] = None
+        handler = None
         for prefix, func in COMMAND_HANDLERS.items():
             if user_input.startswith(prefix):
                 handler = func

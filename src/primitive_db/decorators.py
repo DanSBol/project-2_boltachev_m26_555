@@ -1,12 +1,14 @@
-# src/primitive_db/decorators.py
 import time
-from functools import wraps
-from typing import Any, Callable, Optional
 
 
-def handle_db_errors(func: Callable) -> Callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
+def _copy_metadata(wrapper, func):
+    """Копирует имя и docstring с оригинальной функции на обёртку."""
+    wrapper.__name__ = func.__name__
+    wrapper.__doc__ = func.__doc__
+    return wrapper
+
+def handle_db_errors(func):
+    def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except FileNotFoundError:
@@ -20,29 +22,28 @@ def handle_db_errors(func: Callable) -> Callable:
             print(f"Ошибка валидации: {e}")
         except Exception as e:
             print(f"Произошла непредвиденная ошибка: {e}")
-    return wrapper
 
-def confirm_action(action_name: str) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args, **kwargs) -> Optional[Any]:
-            prompt = (
-                f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: "
-            )
+    return _copy_metadata(wrapper, func)
+
+def confirm_action(action_name: str):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            prompt = f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: "
             response = input(prompt).strip().lower()
             if response != "y":
                 print("Операция отменена пользователем.")
                 return None
             return func(*args, **kwargs)
-        return wrapper
+
+        return _copy_metadata(wrapper, func)
     return decorator
 
-def log_time(func: Callable) -> Callable:
-    @wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
+def log_time(func):
+    def wrapper(*args, **kwargs):
         start = time.monotonic()
         result = func(*args, **kwargs)
         elapsed = time.monotonic() - start
         print(f"Функция {func.__name__} выполнилась за {elapsed:.3f} секунд.")
         return result
-    return wrapper
+
+    return _copy_metadata(wrapper, func)
