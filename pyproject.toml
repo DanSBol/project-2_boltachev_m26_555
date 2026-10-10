@@ -1,7 +1,7 @@
 [project]
 name = "primitive-db"
 version = "0.1.0"
-description = "Простой интерфейс командной строки для примитивной базы данных с метаданными в JSON"
+description = "Простой интерфейс командной строки для примитивной базы данных с CRUD и метаданными в JSON"
 readme = "README.md"
 authors = [
     { name = "Dan Boltachev", email = "dan.s.boltachev@yandex.ru" }
@@ -9,6 +9,7 @@ authors = [
 requires-python = ">=3.12"
 dependencies = [
     "prompt>=0.4.1",
+    "prettytable>=3.0.0",
 ]
 
 [project.scripts]
@@ -21,7 +22,7 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 88
 target-version = "py312"
-exclude = ["venv", ".venv", "dist", "__pycache__"]
+exclude = ["venv", ".venv", "dist", "__pycache__", "data"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "C901"]
