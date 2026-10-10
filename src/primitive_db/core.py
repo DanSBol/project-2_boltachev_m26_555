@@ -2,10 +2,10 @@
 
 import os
 
-from .constants import DATA_DIR
+from .constants import DATA_DIR, ID_COLUMN
 from .decorators import confirm_action, handle_db_errors, log_time
 from .utils import (
-    cached_get,
+    _cached_get,
     clear_cache,
     load_table_data,
     make_select_key,
@@ -16,17 +16,19 @@ from .utils import (
 @handle_db_errors
 @log_time
 def select(table_name, where=None):
-    """Выбирает строки таблицы с фильтрацией по одному условию (key=value)."""
+    """Выбирает строки таблицы с фильтрацией по всем условиям where."""
     data = load_table_data(table_name)
     key = make_select_key(table_name, where or {})
 
     def fetch():
         if not where:
             return data
-        key_col, val = next(iter(where.items()))
-        return [row for row in data if row.get(key_col) == val]
+        return [
+            row for row in data
+            if all(row.get(col) == val for col, val in where.items())
+        ]
 
-    return cached_get(key, fetch)
+    return _cached_get(key, fetch)
 
 
 @handle_db_errors
@@ -37,12 +39,12 @@ def insert(table_name, rows):
         return 0
 
     data = load_table_data(table_name)
-    ids = [r.get("id") for r in data if isinstance(r.get("id"), int)]
+    ids = [r.get(ID_COLUMN) for r in data if isinstance(r.get(ID_COLUMN), int)]
     next_id = (max(ids) + 1) if ids else 1
 
     for row in rows:
-        if "id" not in row or row["id"] is None:
-            row["id"] = next_id
+        if ID_COLUMN not in row or row[ID_COLUMN] is None:
+            row[ID_COLUMN] = next_id
             next_id += 1
 
     data.extend(rows)
@@ -62,8 +64,10 @@ def delete(table_name, where=None):
     if not where:
         data.clear()
     else:
-        key_col, val = next(iter(where.items()))
-        data = [row for row in data if row.get(key_col) != val]
+        data = [
+            row for row in data
+            if not all(row.get(col) == val for col, val in where.items())
+        ]
 
     save_table_data(table_name, data)
     clear_cache()
@@ -86,18 +90,17 @@ def drop_table(table_name):
 @handle_db_errors
 @log_time
 def update(table_name, set_clause, where):
-    """Обновляет поля set_clause у строк, подходящих под условие where."""
+    """Обновляет поля set_clause у строк, подходящих под все условия where."""
     if not where:
         raise ValueError("Для update требуется непустое условие where")
 
     data = load_table_data(table_name)
     updated_count = 0
-    key_col, val = next(iter(where.items()))
 
-    for r in data:
-        if r.get(key_col) == val:
-            for k, v in set_clause.items():
-                r[k] = v
+    for row in data:
+        if all(row.get(col) == val for col, val in where.items()):
+            for set_key, set_value in set_clause.items():
+                row[set_key] = set_value
             updated_count += 1
 
     save_table_data(table_name, data)

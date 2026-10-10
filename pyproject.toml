@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 database = "primitive_db.main:main"
+db-engine = "primitive_db.engine:run"
 
 [build-system]
 requires = ["uv_build>=0.12.23,<0.13.0"]

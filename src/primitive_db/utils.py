@@ -76,21 +76,26 @@ def save_table_data(table_name, data):
         json.dump(data, f, ensure_ascii=False, indent=2)
 
 
-# --- Кэш выборок -------------------------------------------------------------
+# --- Кэш выборок (замыкание) -------------------------------------------------
 
-_cache = {}
+def create_cacher():
+    """Создаёт функции кэширования и очистки кэша через замыкание."""
+    cache = {}
+
+    def cached_get(key, value_func):
+        """Возвращает значение из кэша, при отсутствии вычисляет и запоминает."""
+        if key not in cache:
+            cache[key] = value_func()
+        return cache[key]
+
+    def clear_cache():
+        """Полностью очищает кэш. Вызывается после любой операции записи."""
+        cache.clear()
+
+    return cached_get, clear_cache
 
 
-def cached_get(key, value_func):
-    """Возвращает значение из кэша, при отсутствии вычисляет и запоминает."""
-    if key not in _cache:
-        _cache[key] = value_func()
-    return _cache[key]
-
-
-def clear_cache():
-    """Полностью очищает кэш. Вызывается после любой операции записи."""
-    _cache.clear()
+_cached_get, clear_cache = create_cacher()
 
 
 def make_select_key(table_name, where_clause=None):
@@ -111,7 +116,8 @@ __all__ = [
     "save_metadata",
     "load_table_data",
     "save_table_data",
-    "cached_get",
+    "create_cacher",
+    "_cached_get",
     "clear_cache",
     "make_select_key",
 ]

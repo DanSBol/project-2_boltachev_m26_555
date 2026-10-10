@@ -13,7 +13,8 @@ def _copy_metadata(wrapper, func):
 
 
 def handle_db_errors(func):
-    """Перехватывает исключения и выводит понятные сообщения об ошибках."""
+    """Перехватывает исключения и печатает понятные сообщения об ошибках."""
+
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -34,6 +35,7 @@ def handle_db_errors(func):
 
 def confirm_action(action_name):
     """Запрашивает у пользователя подтверждение перед выполнением действия."""
+
     def decorator(func):
         def wrapper(*args, **kwargs):
             question = f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: "
@@ -44,11 +46,13 @@ def confirm_action(action_name):
             return func(*args, **kwargs)
 
         return _copy_metadata(wrapper, func)
+
     return decorator
 
 
 def log_time(func):
     """Печатает время выполнения функции в секундах."""
+
     def wrapper(*args, **kwargs):
         start = time.monotonic()
         result = func(*args, **kwargs)

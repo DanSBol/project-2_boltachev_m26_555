@@ -5,14 +5,14 @@ import shlex
 
 from prompt import prompt
 
-from .constants import DATA_DIR, METADATA_FILE
+from .constants import DATA_DIR, ID_COLUMN, METADATA_FILE, VALID_TYPES
 from .core import delete, insert, select, update
 from .parser import parse_insert_row, parse_where_clause
 from .utils import ensure_data_dir, load_metadata, save_metadata
 
 
 def handle_create_table(args):
-    """Создаёт таблицу: сохраняет схему колонок в метаданные."""
+    """Создаёт таблицу: добавляет колонку id и сохраняет схему в метаданные."""
     if len(args) < 3:
         error_msg = (
             "Ошибка: недостаточно аргументов. "
@@ -22,19 +22,35 @@ def handle_create_table(args):
         return
 
     table_name = args[1]
-    col_args = args[2:]
 
-    schema = {}
-    for c in col_args:
-        if ":" not in c:
-            err_fmt = f"Ошибка: неверный формат колонки '{c}'. Используйте col:type"
+    # Колонка id добавляется в схему автоматически
+    schema = {ID_COLUMN: "int"}
+    for col_spec in args[2:]:
+        if ":" not in col_spec:
+            err_fmt = (
+                f"Ошибка: неверный формат колонки '{col_spec}'. "
+                "Используйте col:type"
+            )
             print(err_fmt)
             return
-        name, typ = c.split(":", 1)
-        schema[name.strip()] = typ.strip()
+
+        name, typ = col_spec.split(":", 1)
+        name = name.strip()
+        typ = typ.strip().lower()
+        if typ not in VALID_TYPES:
+            allowed = ", ".join(VALID_TYPES)
+            print(f"Ошибка: неизвестный тип '{typ}'. Допустимые типы: {allowed}")
+            return
+        if name in schema:
+            print(f"Ошибка: колонка '{name}' уже объявлена.")
+            return
+        schema[name] = typ
 
     ensure_data_dir()
     metadata = load_metadata()
+    if table_name in metadata:
+        print(f"Ошибка: таблица '{table_name}' уже существует.")
+        return
     metadata[table_name] = schema
     save_metadata(METADATA_FILE, metadata)
     print(f"Таблица '{table_name}' создана со схемой: {schema}")
@@ -46,6 +62,38 @@ def _map_values_to_row(values):
     for i, v in enumerate(values, start=1):
         row[f"col{i}"] = v
     return row
+
+
+def _validate_row_against_schema(table_name, row):
+    """Проверяет значения строки против схемы таблицы. Возвращает True при успехе."""
+    metadata = load_metadata()
+    schema = metadata.get(table_name, {})
+    if not schema:
+        print(f"Ошибка: таблица '{table_name}' не найдена в метаданных. "
+              "Создайте её командой create_table.")
+        return False
+
+    for key, value in row.items():
+        if key == ID_COLUMN:
+            continue
+        expected = schema.get(key)
+        if expected is None:
+            print(f"Ошибка: колонка '{key}' не объявлена в схеме таблицы.")
+            return False
+        if expected == "int" and not isinstance(value, int):
+            print(f"Ошибка: значение поля '{key}' должно быть int.")
+            return False
+        if expected == "float" and not isinstance(value, (int, float)):
+            print(f"Ошибка: значение поля '{key}' должно быть float.")
+            return False
+        if expected == "str" and not isinstance(value, str):
+            print(f"Ошибка: значение поля '{key}' должно быть строкой.")
+            return False
+        if expected == "bool" and not isinstance(value, bool):
+            print(f"Ошибка: значение поля '{key}' должно быть bool.")
+            return False
+
+    return True
 
 
 def _parse_insert(user_input):
@@ -74,7 +122,7 @@ def _parse_insert(user_input):
 
 
 def handle_insert(user_input):
-    """Обрабатывает команду insert into."""
+    """Обрабатывает команду insert into с валидацией типов по схеме."""
     table_name, values_part = _parse_insert(user_input)
     if table_name is None:
         help_msg = (
@@ -91,16 +139,18 @@ def handle_insert(user_input):
         return
 
     rows = [_map_values_to_row(values_list)]
+    if not _validate_row_against_schema(table_name, rows[0]):
+        return
 
-    try:
-        count = insert(table_name, rows)
-        msg = (
-            f"Запись успешно добавлена в таблицу '{table_name}'. "
-            f"Добавлено строк: {count}"
-        )
-        print(msg)
-    except Exception as e:
-        print(f"Ошибка INSERT: {e}")
+    count = insert(table_name, rows)
+    if count is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
+    msg = (
+        f"Запись успешно добавлена в таблицу '{table_name}'. "
+        f"Добавлено строк: {count}"
+    )
+    print(msg)
 
 
 def _parse_select(user_input):
@@ -135,7 +185,6 @@ def handle_select(user_input):
         return
 
     where_dict = {}
-
     if where_part:
         try:
             where_dict = parse_where_clause(where_part)
@@ -144,6 +193,9 @@ def handle_select(user_input):
             return
 
     data = select(table_name, where=where_dict)
+    if data is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
 
     if not data:
         print("Данные не найдены.")
@@ -200,6 +252,17 @@ def _parse_update(user_input):
     return table_name, col, val_raw, where_part
 
 
+def _convert_value(val_raw):
+    """Пытается привести строку к int/float, иначе оставляет строкой."""
+    val = val_raw.strip('"\'')
+    try:
+        if "." in val:
+            return float(val)
+        return int(val)
+    except ValueError:
+        return val
+
+
 def handle_update(user_input):
     """Обрабатывает команду update."""
     table_name, col, val_raw, where_part = _parse_update(user_input)
@@ -211,14 +274,7 @@ def handle_update(user_input):
         print(help_msg)
         return
 
-    val = val_raw.strip('"\'')
-    try:
-        if "." in val:
-            val = float(val)
-        else:
-            val = int(val)
-    except ValueError:
-        pass  # оставляем строкой
+    val = _convert_value(val_raw)
 
     where_dict = {}
     if where_part:
@@ -227,9 +283,15 @@ def handle_update(user_input):
         except ValueError as e:
             print(f"Ошибка WHERE: {e}")
             return
+    if not where_dict:
+        print("Ошибка: для update требуется непустое условие where.")
+        return
 
     set_data = {col: val}
     updated_count = update(table_name, set_data, where_dict)
+    if updated_count is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     print(f"Обновлено строк: {updated_count}")
 
 
@@ -245,7 +307,7 @@ def _parse_delete(user_input):
     where_marker = "where"
     where_idx = rest.lower().find(where_marker)
     if where_idx == -1:
-        # По нашей спецификации where обязателен
+        # По спецификации where обязателен
         return None, None
 
     table_part = rest[:where_idx].strip()
@@ -276,6 +338,9 @@ def handle_delete(user_input):
         return
 
     deleted_count = delete(table_name, where=where_dict)
+    if deleted_count is None:
+        # Операция отменена пользователем либо ошибка напечатана декоратором
+        return
     print(f"Удалено строк: {deleted_count}")
 
 
@@ -304,7 +369,7 @@ def show_help():
 
 
 def handle_create_command(user_input):
-    """Разбирает и выполняет команду create_table (с учётом кавычек через shlex)."""
+    """Разбирает команду create_table с учётом кавычек через shlex."""
     try:
         args = shlex.split(user_input)
     except ValueError as e:

@@ -139,7 +139,7 @@ def _update_splitter_state(state, ch):
 def _split_by_comma_outside_brackets(text):
     """Разбивает строку по запятым, игнорируя запятые внутри скобок и кавычек."""
     parts = []
-    current = []  # используем список для накопления символов
+    current = []  # список для накопления символов текущей части
     state = SplitterState()
 
     for ch in text:
@@ -158,7 +158,7 @@ def _split_by_comma_outside_brackets(text):
 
 
 def _parse_comma_separated_list(text, parse_item):
-    """Парсит список через запятую с учётом скобок/кавычек."""
+    """Парсит список через запятую с учётом скобок и кавычек."""
     result = []
     parts = _split_by_comma_outside_brackets(text)
 

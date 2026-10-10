@@ -3,6 +3,8 @@
 from prettytable import PrettyTable
 
 from .core import delete, drop_table, get_table_stats, insert, select, update
+from .engine import _validate_row_against_schema
+from .parser import parse_where_clause
 
 
 def print_table(rows):
@@ -19,35 +21,16 @@ def print_table(rows):
     print(table)
 
 
-def _parse_value(v_str):
-    """Пытается превратить строку в int/float, иначе оставляет как строку."""
-    v_str = v_str.strip()
-
-    if v_str.lstrip("-").isdigit():
-        return int(v_str)
-
-    clean = v_str.replace(".", "", 1).lstrip("-")
-    if v_str.count(".") == 1 and clean.isdigit():
-        return float(v_str)
-
-    return v_str
-
-
 def parse_where(where_str):
-    """Парсит строку вида key=value,key2=value2 в словарь с авто-приведением типов."""
+    """Парсит строку вида key=value,key2=value2 в словарь с приведением типов."""
     if not where_str:
         return {}
 
     result = {}
-    pairs = where_str.split(",")
-    for pair in pairs:
-        if "=" not in pair:
+    for pair in where_str.split(","):
+        if not pair.strip():
             continue
-        k, v_raw = pair.split("=", 1)
-        key = k.strip()
-        val = _parse_value(v_raw)
-        result[key] = val
-
+        result.update(parse_where_clause(pair))
     return result
 
 
@@ -59,21 +42,25 @@ def handle_select(table, where_str):
     """Обрабатывает команду select и печатает результат."""
     where = parse_where(where_str) if where_str else None
     rows = select(table, where)
+    if rows is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     print_table(rows)
 
 
 def handle_insert(table, values_pairs):
-    """Обрабатывает команду insert: собирает строку и вставляет её."""
+    """Обрабатывает команду insert: собирает строку, валидирует и вставляет её."""
     row = {}
     for pair in values_pairs:
-        if "=" not in pair:
-            continue
-        k, v_raw = pair.split("=", 1)
-        key = k.strip()
-        val = _parse_value(v_raw)
-        row[key] = val
+        row.update(parse_where_clause(pair))
+
+    if not _validate_row_against_schema(table, row):
+        return
 
     count = insert(table, [row])
+    if count is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     print(f"Добавлено строк: {count}")
 
 
@@ -81,10 +68,10 @@ def handle_delete(table, where_str):
     """Обрабатывает команду delete с обязательным условием where."""
     where = parse_where(where_str)
     count = delete(table, where)
-    if count is not None:
-        print(f"Удалено строк: {count}")
-    else:
-        print("Не удалось удалить строки (возможно, условие не совпало).")
+    if count is None:
+        # Операция отменена пользователем либо ошибка напечатана декоратором
+        return
+    print(f"Удалено строк: {count}")
 
 
 def handle_drop(table):
@@ -92,6 +79,9 @@ def handle_drop(table):
     ok = drop_table(table)
     if ok:
         print(f"Таблица '{table}' удалена.")
+    elif ok is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     else:
         print(f"Таблица '{table}' не найдена.")
 
@@ -101,12 +91,18 @@ def handle_update(table, set_str, where_str):
     set_clause = parse_where(set_str)
     where = parse_where(where_str)
     count = update(table, set_clause, where)
+    if count is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     print(f"Обновлено строк: {count}")
 
 
 def handle_stats(table):
     """Обрабатывает команду stats: печатает статистику по таблице."""
     stats_data = get_table_stats(table)
+    if stats_data is None:
+        # Ошибка уже напечатана декоратором handle_db_errors
+        return
     print(f"Таблица: {stats_data['table']}")
     print(f"Строк: {stats_data['row_count']}")
     columns_str = ", ".join(stats_data["columns"])
@@ -292,7 +288,6 @@ def _run_command(parsed):
         ok_where = _check_required_flag("where", where_str, "update")
         if ok_set and ok_where:
             handle_update(table, set_str, where_str)
-        return
 
     elif cmd == "stats":
         handle_stats(table)
@@ -305,6 +300,7 @@ def _run_command(parsed):
 
 def main():
     """Точка входа CLI."""
+    # sys не входит в заявленный список библиотек, поэтому берём argv напрямую
     args = __import__("sys").argv[1:]
     parsed = _parse_args(args)
 
