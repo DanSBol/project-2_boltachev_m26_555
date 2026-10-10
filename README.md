@@ -6,15 +6,17 @@
 ## Назначение
 
 Пакет решает типовые задачи базы данных:
+
 * ввод данных;
 * хранение данных;
 * предоставление данных.
 
 **Конкретные возможности:**
+
 * **CRUD-операции через CLI**: вставка, выборка, обновление, удаление строк.
-* **Хранение в JSON**: каждая таблица — это отдельный JSON‑файл в папке `data/`.
+* **Хранение в JSON**: каждая таблица — это отдельный JSON-файл в папке `data/`.
 * **Автоматическое управление ID**: при вставке записей без `id` система присваивает следующий доступный идентификатор.
-* **Валидация и обработка ошибок**: понятные сообщения при отсутствии файлов, неверных типах данных и т.п.
+* **Валидация и обработка ошибок**: понятные сообщения при отсутствии файлов, неверных типах данных и т. п.
 * **Декораторы для логики**: подтверждение опасных действий (`delete`, `drop`), логирование времени выполнения, централизованная обработка ошибок.
 * **Кэширование выборок**: повторные запросы `select` выполняются почти мгновенно за счёт кэша в памяти.
 * **Поддержка разных типов данных**: строки, целые числа, числа с плавающей точкой.
@@ -26,101 +28,146 @@
 ### Как инструмент для работы в консоли (рекомендуется для запуска `database`)
 
 1. **Соберите пакет:**
+
    ```bash
    uv build
-2. **Установите собранный wheel‑файл:**
+   ```
+
+2. **Установите собранный wheel-файл:**
+
    ```bash
    uv tool install "dist/primitive_db-0.1.0-py3-none-any.whl"
-   Для Windows: убедитесь, что uv добавлен в PATH. Если команда uv не распознаётся, используйте py -m uv.
-3. **После установки станет доступна команда database в терминале.**
- 
-### Как библиотека в Python‑проекте
+   ```
 
-   **Если вы хотите использовать функции напрямую в коде:**
-   ```bash
-   uv pip install "dist/primitive_db-0.1.0-py3-none-any.whl"
+   > Для Windows: убедитесь, что `uv` добавлен в `PATH`. Если команда `uv` не распознаётся, используйте `py -m uv`.
+
+3. **После установки станет доступна команда `database` в терминале.**
+
+### Как библиотека в Python-проекте
+
+Если вы хотите использовать функции напрямую в коде:
+
+```bash
+uv pip install "dist/primitive_db-0.1.0-py3-none-any.whl"
+```
+
+---
 
 ## Пример использования
 
-   ```python
-   from primitive_db.core import insert, select
+```python
+from primitive_db.core import insert, select
 
-   insert("users", [{"name": "Alice", "age": 30}])
-   rows = select("users")
+insert("users", [{"name": "Alice", "age": 30}])
+rows = select("users")
+```
+
+---
 
 ## Быстрый старт: примеры команд
 
-   Все примеры выполняются в терминале после установки пакета.
+Все примеры выполняются в терминале после установки пакета.
 
 ### Вставить данные
-   ```bash
-   database insert users --values name=Alice age=30 city=Moscow
-   database insert users --values name=Bob age=25 city=StPetersburg
+
+```bash
+database insert users --values name=Alice age=30 city=Moscow
+database insert users --values name=Bob age=25 city=StPetersburg
+```
 
 ### Выбрать все строки
-   ```bash
-   database select users
+
+```bash
+database select users
+```
 
 ### Выбрать с условием (WHERE)
-   ```bash
-   database select users --where city=Moscow
+
+```bash
+database select users --where city=Moscow
+```
 
 ### Обновить данные
-   ```bash
-   database update users --set age=31 --where name=Alice
+
+```bash
+database update users --set age=31 --where name=Alice
+```
 
 ### Удалить строки по условию
-   ```bash
-   database delete users --where name=Bob
+
+```bash
+database delete users --where name=Bob
+```
 
 ### Статистика по таблице
-   ```bash
-   database stats users
+
+```bash
+database stats users
+```
 
 ### Полностью удалить таблицу (и файл)
-   ```bash
-   database drop users
 
-   Все операции, изменяющие данные (delete, drop, update), запрашивают подтверждение у пользователя.
+```bash
+database drop users
+```
+
+> Все операции, изменяющие данные (`delete`, `drop`, `update`), запрашивают подтверждение у пользователя.
+
+---
 
 ## Структура проекта
 
 | Путь | Назначение |
 | --- | --- |
-| `src/primitive_db/core.py` | Основная логика CRUD, работа с JSON‑файлами, генерация ID, кэширование. |
-| `src/primitive_db/main.py` | CLI‑интерфейс на базе `argparse`, парсинг аргументов, форматирование вывода через `prettytable`. |
+| `src/primitive_db/core.py` | Основная логика CRUD, работа с JSON-файлами, генерация ID, кэширование. |
+| `src/primitive_db/main.py` | CLI-интерфейс на базе `argparse`, парсинг аргументов, форматирование вывода через `prettytable`. |
 | `src/primitive_db/decorators.py` | Декораторы для подтверждения действий, логирования времени и обработки ошибок. |
 | `src/primitive_db/utils.py` | Вспомогательные функции: работа с директорией `data/`, загрузка/сохранение метаданных, кэш. |
 | `pyproject.toml` | Конфигурация проекта: зависимости, скрипты, настройки линтера Ruff. |
 
+---
+
 ## Хранение данных
 
-   Данные хранятся в виде JSON‑файлов в директории data/ рядом с рабочей папкой:
+Данные хранятся в виде JSON-файлов в директории `data/` рядом с рабочей папкой:
 
-### data/users.json
-   - таблица users.
+* `data/users.json` — таблица `users`;
+* `data/products.json` — таблица `products`.
 
-### data/products.json
-   - таблица products.
+Формат файла — список JSON-объектов:
 
-    Формат файла - список JSON-объектов:
-    ```json
-    [
-       {"id": 1, "name": "Alice", "age": 30, "city": "Moscow"},
-       {"id": 2, "name": "Bob", "age": 25, "city": "StPetersburg"}
-    ]
+```json
+[
+  {"id": 1, "name": "Alice", "age": 30, "city": "Moscow"},
+  {"id": 2, "name": "Bob", "age": 25, "city": "StPetersburg"}
+]
+```
+
+---
 
 ## Требования
 
-   Python ≥ 3.12
-   Зависимости: prompt, prettytable
+* Python ≥ 3.12
+* Зависимости: `prompt`, `prettytable`
+
+---
 
 ## Разработка и проверка кода
 
-### Для проверки стиля кода и автоматического исправления ошибок:
-   ```bash
-   uv run ruff check --fix src/
+### Проверка стиля кода и автоматическое исправление ошибок
 
-### Для сборки пакета:
-   ```bash
-   uv build
+```bash
+uv run ruff check --fix src/
+```
+
+### Сборка пакета
+
+```bash
+uv build
+```
+
+---
+
+## Видеозапись сессии
+
+[![Asciinema Preview](https://asciinema.org/a/1MbF1qQIwOfthokx.png)](https://asciinema.org/a/1MbF1qQIwOfthokx)
