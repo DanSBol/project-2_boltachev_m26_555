@@ -121,9 +121,9 @@
    ```bash
    uv run ruff check --fix src/
 
-### Видеозапись сессии
-
-[![asciinema](https://asciinema.org/a/123456789.svg)](https://asciinema.org/connect/b7244580-a2f8-42c8-89e5-e351d950d4f6)
 ### Для сборки пакета:
    ```bash
    uv build
+
+### Видеозапись сессии
+[![asciinema](https://asciinema.org/a/123456789.svg)](https://asciinema.org/connect/b7244580-a2f8-42c8-89e5-e351d950d4f6)
