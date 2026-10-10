@@ -1,11 +1,17 @@
+"""Функции для разбора литералов, значений вставки и условий where."""
+
+
 def _is_quoted_string(s):
+    """Проверяет, является ли строка литералом в кавычках."""
     if len(s) < 2:
         return False
     starts_with_double = s.startswith('"') and s.endswith('"')
     starts_with_single = s.startswith("'") and s.endswith("'")
     return starts_with_double or starts_with_single
 
+
 def _try_parse_number(s):
+    """Пытается распарсить число; возвращает None, если не получилось."""
     try:
         if "." in s:
             return float(s)
@@ -13,7 +19,9 @@ def _try_parse_number(s):
     except ValueError:
         return None
 
+
 def _parse_bool_literal(s):
+    """Пытается распознать true/false; возвращает None, если не совпадает."""
     lower = s.lower()
     if lower == "true":
         return True
@@ -21,12 +29,16 @@ def _parse_bool_literal(s):
         return False
     return None
 
+
 def _parse_string_literal(s):
+    """Если строка в кавычках — возвращает содержимое без кавычек, иначе None."""
     if _is_quoted_string(s):
         return s[1:-1]
     return None
 
+
 def _parse_list_literal(s, parse_item):
+    """Парсит [...] литерал; возвращает None, если формат не совпадает."""
     if not (s.startswith("[") and s.endswith("]")):
         return None
     inner = s[1:-1].strip()
@@ -34,7 +46,9 @@ def _parse_list_literal(s, parse_item):
         return []
     return _parse_comma_separated_list(inner, parse_item=parse_item)
 
+
 def _parse_tuple_literal(s, parse_item):
+    """Парсит (...) литерал; возвращает None, если формат не совпадает."""
     if not (s.startswith("(") and s.endswith(")")):
         return None
     inner = s[1:-1].strip()
@@ -45,12 +59,16 @@ def _parse_tuple_literal(s, parse_item):
         return (_parse_simple_literal(inner),)
     return tuple(_parse_comma_separated_list(inner, parse_item=parse_item))
 
+
 def _parse_dict_literal_wrapper(s):
+    """Парсит {...} литерал; возвращает None, если формат не совпадает."""
     if not (s.startswith("{") and s.endswith("}")):
         return None
     return _parse_dict_literal(s[1:-1])
 
+
 def _parse_simple_literal(s):
+    """Парсит литерал: булевы значения, строки, числа, списки, кортежи, словари."""
     s = s.strip()
     if not s:
         raise ValueError("Пустой литерал")
@@ -87,14 +105,19 @@ def _parse_simple_literal(s):
 
     raise ValueError(f"Неподдерживаемый литерал: {s}")
 
+
 class SplitterState:
+    """Состояние парсера при разбиении по запятым (скобки, кавычки)."""
+
     __slots__ = ("depth", "in_quote")
 
     def __init__(self):
         self.depth = 0
         self.in_quote = None
 
+
 def _update_splitter_state(state, ch):
+    """Обновляет состояние парсера по одному символу."""
     if ch in ('"', "'"):
         if state.in_quote is None:
             state.in_quote = ch
@@ -112,7 +135,9 @@ def _update_splitter_state(state, ch):
             state.depth -= 1
         return
 
+
 def _split_by_comma_outside_brackets(text):
+    """Разбивает строку по запятым, игнорируя запятые внутри скобок и кавычек."""
     parts = []
     current = []  # используем список для накопления символов
     state = SplitterState()
@@ -131,7 +156,9 @@ def _split_by_comma_outside_brackets(text):
 
     return parts
 
+
 def _parse_comma_separated_list(text, parse_item):
+    """Парсит список через запятую с учётом скобок/кавычек."""
     result = []
     parts = _split_by_comma_outside_brackets(text)
 
@@ -141,7 +168,9 @@ def _parse_comma_separated_list(text, parse_item):
         result.append(parse_item(part))
     return result
 
+
 def _parse_dict_literal(inner):
+    """Парсит {key: value, key2: value2} в упрощённом режиме."""
     inner = inner.strip()
     if not inner:
         return {}
@@ -160,7 +189,9 @@ def _parse_dict_literal(inner):
 
     return result
 
+
 def parse_values(values_str):
+    """Парсит строку значений в список/кортеж/словарь литералов."""
     if not values_str or not values_str.strip():
         raise ValueError("Пустая строка значений")
 
@@ -177,7 +208,9 @@ def parse_values(values_str):
         return result
     return [result]
 
+
 def normalize_value(raw_value):
+    """Приводит строковые значения: true/false к булеву, остальное — strip()."""
     if isinstance(raw_value, str):
         lower = raw_value.lower()
         if lower in ("true", "false"):
@@ -185,7 +218,9 @@ def normalize_value(raw_value):
         return raw_value.strip()
     return raw_value
 
+
 def parse_insert_row(values_input):
+    """Парсит строку вставки в список значений строки."""
     raw_data = parse_values(values_input)
 
     if isinstance(raw_data, dict):
@@ -196,7 +231,9 @@ def parse_insert_row(values_input):
 
     return [normalize_value(raw_data)]
 
+
 def parse_where_clause(where_input):
+    """Парсит условие key=value в словарь с приведением типов."""
     if not where_input:
         return {}
 

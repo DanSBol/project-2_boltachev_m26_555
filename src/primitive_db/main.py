@@ -1,9 +1,12 @@
+"""CLI-интерфейс: разбор аргументов командной строки и вывод таблиц."""
+
 from prettytable import PrettyTable
 
 from .core import delete, drop_table, get_table_stats, insert, select, update
 
 
 def print_table(rows):
+    """Выводит данные в виде таблицы через PrettyTable."""
     if not rows:
         print("(пусто)")
         return
@@ -15,7 +18,9 @@ def print_table(rows):
         table.add_row([row.get(h) for h in headers])
     print(table)
 
+
 def _parse_value(v_str):
+    """Пытается превратить строку в int/float, иначе оставляет как строку."""
     v_str = v_str.strip()
 
     if v_str.lstrip("-").isdigit():
@@ -27,7 +32,9 @@ def _parse_value(v_str):
 
     return v_str
 
+
 def parse_where(where_str):
+    """Парсит строку вида key=value,key2=value2 в словарь с авто-приведением типов."""
     if not where_str:
         return {}
 
@@ -43,12 +50,20 @@ def parse_where(where_str):
 
     return result
 
+
+# -----------------------------------------------------------------------------
+# Обработчики команд
+# -----------------------------------------------------------------------------
+
 def handle_select(table, where_str):
+    """Обрабатывает команду select и печатает результат."""
     where = parse_where(where_str) if where_str else None
     rows = select(table, where)
     print_table(rows)
 
+
 def handle_insert(table, values_pairs):
+    """Обрабатывает команду insert: собирает строку и вставляет её."""
     row = {}
     for pair in values_pairs:
         if "=" not in pair:
@@ -61,7 +76,9 @@ def handle_insert(table, values_pairs):
     count = insert(table, [row])
     print(f"Добавлено строк: {count}")
 
+
 def handle_delete(table, where_str):
+    """Обрабатывает команду delete с обязательным условием where."""
     where = parse_where(where_str)
     count = delete(table, where)
     if count is not None:
@@ -69,20 +86,26 @@ def handle_delete(table, where_str):
     else:
         print("Не удалось удалить строки (возможно, условие не совпало).")
 
+
 def handle_drop(table):
+    """Обрабатывает команду drop: полностью удаляет таблицу."""
     ok = drop_table(table)
     if ok:
         print(f"Таблица '{table}' удалена.")
     else:
         print(f"Таблица '{table}' не найдена.")
 
+
 def handle_update(table, set_str, where_str):
+    """Обрабатывает команду update с флагами --set и --where."""
     set_clause = parse_where(set_str)
     where = parse_where(where_str)
     count = update(table, set_clause, where)
     print(f"Обновлено строк: {count}")
 
+
 def handle_stats(table):
+    """Обрабатывает команду stats: печатает статистику по таблице."""
     stats_data = get_table_stats(table)
     print(f"Таблица: {stats_data['table']}")
     print(f"Строк: {stats_data['row_count']}")
@@ -92,7 +115,9 @@ def handle_stats(table):
         print("Пример строки:")
         print_table([stats_data["sample_row"]])
 
+
 def show_help():
+    """Выводит справку по CLI-командам."""
     help_text = (
         "CLI для примитивной JSON-БД\n\n"
         "Доступные команды:\n"
@@ -116,14 +141,22 @@ def show_help():
     )
     print(help_text)
 
+
+# -----------------------------------------------------------------------------
+# Парсинг: мелкие хелперы
+# -----------------------------------------------------------------------------
+
 def _validate_table_present(command, i, n, args):
+    """Проверяет наличие имени таблицы после команды."""
     if i >= n:
         print("Ошибка: требуется имя таблицы.")
         show_help()
         return i, None
     return i + 1, args[i]
 
+
 def _collect_values_until_next_flag(args, start_idx, n):
+    """Собирает аргументы для --values до следующего флага."""
     values_pairs = []
     i = start_idx
     while i < n and not args[i].startswith("--"):
@@ -131,7 +164,9 @@ def _collect_values_until_next_flag(args, start_idx, n):
         i += 1
     return values_pairs, i
 
+
 def _check_required_flag(flag_name, present, cmd_name):
+    """Общая проверка: если флаг обязателен и его нет — ошибка и справка."""
     if not present:
         msg = f"Ошибка: для команды '{cmd_name}' требуется флаг --{flag_name}"
         print(msg)
@@ -139,13 +174,16 @@ def _check_required_flag(flag_name, present, cmd_name):
         return False
     return True
 
+
 def _parse_where_flag(args, i, n):
+    """Извлекает значение флага --where, если он присутствует."""
     if args[i] == "--where" and i + 1 < n:
         return args[i + 1], i + 2
     return None, i
 
 
 def _parse_values_flag(command, args, i, n):
+    """Извлекает значения флага --values для команды insert."""
     if command == "insert" and args[i] == "--values":
         if i + 1 >= n:
             print("Ошибка: для --values требуется хотя бы один field=value.")
@@ -161,12 +199,14 @@ def _parse_values_flag(command, args, i, n):
 
 
 def _parse_set_flag(command, args, i, n):
+    """Извлекает значение флага --set для команды update."""
     if command == "update" and args[i] == "--set" and i + 1 < n:
         return args[i + 1], i + 2
     return None, i
 
 
 def _parse_args(args):
+    """Разбирает аргументы CLI. Логика вынесена в хелперы, чтобы снизить сложность."""
     if not args:
         return {"command": "help"}
 
@@ -219,7 +259,9 @@ def _parse_args(args):
 
     return result
 
+
 def _run_command(parsed):
+    """Выполняет команду по разобранному словарю аргументов."""
     cmd = parsed["command"]
     table = parsed.get("table")
 
@@ -256,12 +298,14 @@ def _run_command(parsed):
         handle_stats(table)
 
     else:
+        # Сюда не должны попадать неизвестные команды: они уже отловлены в _parse_args
         print(f"Неизвестная команда: {cmd}")
         show_help()
 
+
 def main():
-    import sys
-    args = sys.argv[1:]
+    """Точка входа CLI."""
+    args = __import__("sys").argv[1:]
     parsed = _parse_args(args)
 
     if parsed is None:
@@ -273,6 +317,7 @@ def main():
         return
 
     _run_command(parsed)
+
 
 if __name__ == "__main__":
     main()

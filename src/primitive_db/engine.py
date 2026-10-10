@@ -1,9 +1,18 @@
-# src/primitive_db/engine.py
+"""Интерактивный режим: цикл ввода и обработка SQL-подобных команд."""
+
+import os
+import shlex
+
+from prompt import prompt
+
+from .constants import DATA_DIR, METADATA_FILE
 from .core import delete, insert, select, update
 from .parser import parse_insert_row, parse_where_clause
+from .utils import ensure_data_dir, load_metadata, save_metadata
 
 
 def handle_create_table(args):
+    """Создаёт таблицу: сохраняет схему колонок в метаданные."""
     if len(args) < 3:
         error_msg = (
             "Ошибка: недостаточно аргументов. "
@@ -15,29 +24,32 @@ def handle_create_table(args):
     table_name = args[1]
     col_args = args[2:]
 
-    metadata = {}
+    schema = {}
     for c in col_args:
         if ":" not in c:
             err_fmt = f"Ошибка: неверный формат колонки '{c}'. Используйте col:type"
             print(err_fmt)
             return
-        parts = c.split(":", 1)
-        if len(parts) != 2:
-            print(f"Ошибка: некорректный формат колонки '{c}'")
-            return
-        name, typ = parts
-        metadata[name.strip()] = typ.strip()
+        name, typ = c.split(":", 1)
+        schema[name.strip()] = typ.strip()
 
-    print(f"Таблица '{table_name}' создана со схемой: {metadata}")
+    ensure_data_dir()
+    metadata = load_metadata()
+    metadata[table_name] = schema
+    save_metadata(METADATA_FILE, metadata)
+    print(f"Таблица '{table_name}' создана со схемой: {schema}")
+
 
 def _map_values_to_row(values):
+    """Сопоставляет значения колонкам col1..colN по порядку."""
     row = {}
     for i, v in enumerate(values, start=1):
-        col_name = f"col{i}"
-        row[col_name] = v
+        row[f"col{i}"] = v
     return row
 
+
 def _parse_insert(user_input):
+    """Разбирает 'insert into <table> values <...>'; возвращает (таблица, значения)."""
     lower = user_input.lower()
     if not lower.startswith("insert into"):
         return None, None
@@ -60,7 +72,9 @@ def _parse_insert(user_input):
 
     return table_name, after
 
+
 def handle_insert(user_input):
+    """Обрабатывает команду insert into."""
     table_name, values_part = _parse_insert(user_input)
     if table_name is None:
         help_msg = (
@@ -86,10 +100,11 @@ def handle_insert(user_input):
         )
         print(msg)
     except Exception as e:
-        err_msg = f"Ошибка INSERT: {e}"
-        print(err_msg)
+        print(f"Ошибка INSERT: {e}")
+
 
 def _parse_select(user_input):
+    """Разбирает 'select from <table> [where ...]'; возвращает (таблица, where)."""
     lower = user_input.lower()
     if not lower.startswith("select from"):
         return None, None
@@ -107,7 +122,9 @@ def _parse_select(user_input):
 
     return table_name, where_part
 
+
 def handle_select(user_input):
+    """Обрабатывает команду select from и печатает результат."""
     table_name, where_part = _parse_select(user_input)
     if table_name is None:
         help_msg = (
@@ -142,7 +159,9 @@ def handle_select(user_input):
         line = " | ".join(str(row.get(h, "")) for h in headers)
         print(line)
 
+
 def _parse_update(user_input):
+    """Разбирает 'update <table> set col=value [where ...]'."""
     lower = user_input.lower()
     if not lower.startswith("update"):
         return None, None, None, None
@@ -180,7 +199,9 @@ def _parse_update(user_input):
 
     return table_name, col, val_raw, where_part
 
+
 def handle_update(user_input):
+    """Обрабатывает команду update."""
     table_name, col, val_raw, where_part = _parse_update(user_input)
     if table_name is None:
         help_msg = (
@@ -208,10 +229,12 @@ def handle_update(user_input):
             return
 
     set_data = {col: val}
-    updated_count = update(table_name, set_data=set_data, where=where_dict)
+    updated_count = update(table_name, set_data, where_dict)
     print(f"Обновлено строк: {updated_count}")
 
+
 def _parse_delete(user_input):
+    """Разбирает 'delete from <table> where ...'; where обязателен."""
     lower = user_input.lower()
     if not lower.startswith("delete from"):
         return None, None
@@ -234,7 +257,9 @@ def _parse_delete(user_input):
 
     return table_name, where_part
 
+
 def handle_delete(user_input):
+    """Обрабатывает команду delete from."""
     table_name, where_part = _parse_delete(user_input)
     if table_name is None:
         help_msg = (
@@ -253,7 +278,21 @@ def handle_delete(user_input):
     deleted_count = delete(table_name, where=where_dict)
     print(f"Удалено строк: {deleted_count}")
 
+
+def list_tables():
+    """Выводит список таблиц (JSON-файлов в директории данных)."""
+    if not os.path.exists(DATA_DIR):
+        print("Таблиц нет.")
+        return
+    tables = [f[:-5] for f in os.listdir(DATA_DIR) if f.endswith(".json")]
+    if tables:
+        print("Список таблиц: " + ", ".join(sorted(tables)))
+    else:
+        print("Таблиц нет.")
+
+
 def show_help():
+    """Выводит справку по интерактивным командам."""
     print("Доступные команды:")
     print("  create_table <имя> <col:type> ...      - создать таблицу")
     print("  insert into <имя> values (...)         - вставить строку")
@@ -263,20 +302,33 @@ def show_help():
     print("  list_tables                            - показать список таблиц")
     print("  quit                                   - выйти")
 
+
+def handle_create_command(user_input):
+    """Разбирает и выполняет команду create_table (с учётом кавычек через shlex)."""
+    try:
+        args = shlex.split(user_input)
+    except ValueError as e:
+        print(f"Ошибка разбора команды: {e}")
+        return
+    handle_create_table(args)
+
+
 COMMAND_HANDLERS = {
-    "create_table": lambda cmd: handle_create_table(cmd.split()),
+    "create_table": handle_create_command,
     "insert": handle_insert,
     "select": handle_select,
     "update": handle_update,
     "delete": handle_delete,
 }
 
+
 def run():
+    """Основной цикл интерактивного режима."""
     print("Primitive DB Engine запущен. Введите 'help' для списка команд.")
 
     while True:
         try:
-            user_input = input("> ").strip()
+            user_input = prompt("> ").strip()
         except (EOFError, KeyboardInterrupt):
             print("\nВыход из системы.")
             break
@@ -293,7 +345,7 @@ def run():
             show_help()
             continue
         elif cmd_lower == "list_tables":
-            print("[INFO] Список таблиц: users, orders, products (из файловой системы)")
+            list_tables()
             continue
 
         handler = None
@@ -306,3 +358,7 @@ def run():
             handler(user_input)
         else:
             print("Неизвестная команда. Введите 'help'.")
+
+
+if __name__ == "__main__":
+    run()

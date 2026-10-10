@@ -58,7 +58,7 @@ uv pip install "dist/primitive_db-0.1.0-py3-none-any.whl"
 ```python
 from primitive_db.core import insert, select
 
-insert("users", [{"name": "Alice", "age": 30}])
+insert("users", [{"name": "Tatyana", "age": 43}])
 rows = select("users")
 ```
 
@@ -71,8 +71,8 @@ rows = select("users")
 ### Вставить данные
 
 ```bash
-database insert users --values name=Alice age=30 city=Moscow
-database insert users --values name=Bob age=25 city=StPetersburg
+database insert users --values name=Tatyana age=43 city=Moscow
+database insert users --values name=Dan age=44 city=StPetersburg
 ```
 
 ### Выбрать все строки
@@ -138,8 +138,8 @@ database drop users
 
 ```json
 [
-  {"id": 1, "name": "Alice", "age": 30, "city": "Moscow"},
-  {"id": 2, "name": "Bob", "age": 25, "city": "StPetersburg"}
+  {"id": 1, "name": "Tatyana", "age": 43, "city": "Moscow"},
+  {"id": 2, "name": "Dan", "age": 44, "city": "StPetersburg"}
 ]
 ```
 

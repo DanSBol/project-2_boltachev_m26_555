@@ -1,4 +1,8 @@
+"""Декораторы: обработка ошибок, подтверждение действий, замер времени."""
+
 import time
+
+from prompt import prompt
 
 
 def _copy_metadata(wrapper, func):
@@ -7,7 +11,9 @@ def _copy_metadata(wrapper, func):
     wrapper.__doc__ = func.__doc__
     return wrapper
 
+
 def handle_db_errors(func):
+    """Перехватывает исключения и выводит понятные сообщения об ошибках."""
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
@@ -25,11 +31,13 @@ def handle_db_errors(func):
 
     return _copy_metadata(wrapper, func)
 
-def confirm_action(action_name: str):
+
+def confirm_action(action_name):
+    """Запрашивает у пользователя подтверждение перед выполнением действия."""
     def decorator(func):
         def wrapper(*args, **kwargs):
-            prompt = f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: "
-            response = input(prompt).strip().lower()
+            question = f"Вы уверены, что хотите выполнить \"{action_name}\"? [y/n]: "
+            response = prompt(question).strip().lower()
             if response != "y":
                 print("Операция отменена пользователем.")
                 return None
@@ -38,7 +46,9 @@ def confirm_action(action_name: str):
         return _copy_metadata(wrapper, func)
     return decorator
 
+
 def log_time(func):
+    """Печатает время выполнения функции в секундах."""
     def wrapper(*args, **kwargs):
         start = time.monotonic()
         result = func(*args, **kwargs)

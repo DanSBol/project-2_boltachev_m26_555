@@ -1,15 +1,19 @@
+"""Вспомогательные функции: файлы метаданных, данных таблиц и кэш."""
+
 import json
 import os
 
-METADATA_FILE = "db_meta.json"
-DATA_DIR = "data"
+from .constants import DATA_DIR, METADATA_FILE
+
 
 def ensure_data_dir():
-    # Аналог Path(DATA_DIR).mkdir(exist_ok=True)
+    """Создаёт директорию данных, если её ещё нет."""
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
 
+
 def load_metadata(filepath=METADATA_FILE):
+    """Загружает метаданные из JSON-файла; при ошибке возвращает пустой словарь."""
     if not os.path.exists(filepath):
         return {}
 
@@ -24,14 +28,20 @@ def load_metadata(filepath=METADATA_FILE):
         print(msg)
         return {}
 
+
 def save_metadata(filepath, data):
+    """Сохраняет метаданные в JSON-файл."""
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+
 def _build_table_path(table_name):
+    """Возвращает путь к JSON-файлу таблицы."""
     return os.path.join(DATA_DIR, f"{table_name}.json")
 
+
 def load_table_data(table_name):
+    """Загружает данные таблицы; при ошибке возвращает пустой список."""
     ensure_data_dir()
     filepath = _build_table_path(table_name)
 
@@ -57,33 +67,41 @@ def load_table_data(table_name):
         print(msg)
         return []
 
+
 def save_table_data(table_name, data):
+    """Сохраняет данные таблицы в JSON-файл."""
     ensure_data_dir()
     filepath = _build_table_path(table_name)
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def create_cacher():
-    cache = {}
 
-    def cache_result(key, value_func):
-        if key in cache:
-            return cache[key]
-        result = value_func()
-        cache[key] = result
-        return result
+# --- Кэш выборок -------------------------------------------------------------
 
-    return cache_result
+_cache = {}
 
-_cached_get = create_cacher()
+
+def cached_get(key, value_func):
+    """Возвращает значение из кэша, при отсутствии вычисляет и запоминает."""
+    if key not in _cache:
+        _cache[key] = value_func()
+    return _cache[key]
+
+
+def clear_cache():
+    """Полностью очищает кэш. Вызывается после любой операции записи."""
+    _cache.clear()
+
 
 def make_select_key(table_name, where_clause=None):
+    """Формирует ключ кэша для выборки с учётом условия where."""
     if not where_clause:
         return f"select:{table_name}:no_where"
 
     sorted_items = sorted(where_clause.items(), key=lambda x: x[0])
     where_str = ",".join(f"{k}={v}" for k, v in sorted_items)
     return f"select:{table_name}:{where_str}"
+
 
 __all__ = [
     "METADATA_FILE",
@@ -93,6 +111,7 @@ __all__ = [
     "save_metadata",
     "load_table_data",
     "save_table_data",
-    "_cached_get",
+    "cached_get",
+    "clear_cache",
     "make_select_key",
 ]
